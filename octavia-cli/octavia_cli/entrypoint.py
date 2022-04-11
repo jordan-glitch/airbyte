@@ -6,6 +6,7 @@ from typing import List
 
 import airbyte_api_client
 import click
+import pkg_resources
 from airbyte_api_client.api import workspace_api
 
 from .apply import commands as apply_commands
@@ -13,8 +14,26 @@ from .check_context import check_api_health, check_is_initialized, check_workspa
 from .generate import commands as generate_commands
 from .init import commands as init_commands
 from .list import commands as list_commands
+from .telemetry import TelemetryClient
 
 AVAILABLE_COMMANDS: List[click.Command] = [list_commands._list, init_commands.init, generate_commands.generate, apply_commands.apply]
+
+
+def set_context(ctx, airbyte_url, workspace_id, enable_telemetry):
+    telemetry_client = TelemetryClient(enable_telemetry)
+    try:
+        ctx.ensure_object(dict)
+        ctx.obj["OCTAVIA_VERSION"] = pkg_resources.require("octavia-cli")[0].version
+        ctx.obj["TELEMETRY_CLIENT"] = telemetry_client
+        api_client = get_api_client(airbyte_url)
+        ctx.obj["WORKSPACE_ID"] = get_workspace_id(api_client, workspace_id)
+        api_client.user_agent = f"octavia-cli/{ctx.obj['OCTAVIA_VERSION']}/{ctx.obj['WORKSPACE_ID']}"
+        ctx.obj["API_CLIENT"] = api_client
+        ctx.obj["PROJECT_IS_INITIALIZED"] = check_is_initialized()
+    except Exception as e:
+        telemetry_client.track_command(ctx, error=e)
+        raise e
+    return ctx
 
 
 @click.group()
@@ -29,16 +48,11 @@ AVAILABLE_COMMANDS: List[click.Command] = [list_commands._list, init_commands.in
     "--enable-telemetry/--disable-telemetry",
     envvar="OCTAVIA_ENABLE_TELEMETRY",
     default=True,
-    help="Enable or disable usage tracking for telemetry and analytics.",
+    help="Enable or disable usage tracking for telemetry.",
 )
 @click.pass_context
 def octavia(ctx: click.Context, airbyte_url: str, workspace_id: str, enable_telemetry: bool) -> None:
-    ctx.ensure_object(dict)
-    ctx.obj["API_CLIENT"] = get_api_client(airbyte_url)
-    ctx.obj["WORKSPACE_ID"] = get_workspace_id(ctx.obj["API_CLIENT"], workspace_id)
-    ctx.obj["PROJECT_IS_INITIALIZED"] = check_is_initialized()
-    ctx.obj["TELEMETRY_IS_ENABLED"] = enable_telemetry
-
+    ctx = set_context(ctx, airbyte_url, workspace_id, enable_telemetry)
     click.echo(
         click.style(
             f"🐙 - Octavia is targetting your Airbyte instance running at {airbyte_url} on workspace {ctx.obj['WORKSPACE_ID']}.", fg="green"
@@ -51,6 +65,7 @@ def octavia(ctx: click.Context, airbyte_url: str, workspace_id: str, enable_tele
 def get_api_client(airbyte_url):
     client_configuration = airbyte_api_client.Configuration(host=f"{airbyte_url}/api")
     api_client = airbyte_api_client.ApiClient(client_configuration)
+    api_client.user_agent = "octavia-cli/"
     check_api_health(api_client)
     return api_client
 

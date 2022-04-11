@@ -2,10 +2,11 @@
 # Copyright (c) 2021 Airbyte, Inc., all rights reserved.
 #
 import os
+import uuid
+from typing import Optional
 
 import analytics
 import click
-import pkg_resources
 
 
 class TelemetryClient:
@@ -23,7 +24,7 @@ class TelemetryClient:
         else:
             return TelemetryClient.PROD_WRITE_KEY
 
-    def _create_command_name(self, ctx):
+    def _create_command_name(self, ctx, extra_info_name: Optional[str] = None):
         has_parent = True
         commands_name = [ctx.info_name]
         while has_parent:
@@ -32,11 +33,22 @@ class TelemetryClient:
                 commands_name.insert(0, ctx.info_name)
             else:
                 has_parent = False
+        if extra_info_name is not None:
+            commands_name.append(extra_info_name)
         return " ".join(commands_name)
 
-    def track_command(self, ctx: click.Context):
-        workspace_id = ctx.obj["WORKSPACE_ID"]
-        segment_context = {"app": {"name": "octavia-cli", "version": pkg_resources.require("octavia-cli")[0].version}}
-        self.segment_client.identify(anonymous_id=workspace_id, context=segment_context)
-        command_name = self._create_command_name(ctx)
-        self.segment_client.track(anonymous_id=workspace_id, event=command_name, context=segment_context)
+    def track_command(self, ctx: click.Context, error: Exception = None, extra_info_name: Optional[str] = None):
+        user_id = ctx.obj.get("WORKSPACE_ID")
+        anonymous_id = None if user_id else str(uuid.uuid1())
+
+        segment_context = {"app": {"name": "octavia-cli", "version": ctx.obj.get("OCTAVIA_VERSION")}}
+        segment_properties = {
+            "success": error is None,
+            "error_type": error.__class__.__name__,
+            "project_is_initialized": ctx.obj.get("PROJECT_IS_INITIALIZED"),
+        }
+        self.segment_client.identify(user_id=user_id, anonymous_id=anonymous_id, context=segment_context)
+        command_name = self._create_command_name(ctx, extra_info_name)
+        self.segment_client.track(
+            user_id=user_id, anonymous_id=anonymous_id, event=command_name, properties=segment_properties, context=segment_context
+        )
