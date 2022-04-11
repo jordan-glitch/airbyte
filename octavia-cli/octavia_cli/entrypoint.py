@@ -25,12 +25,20 @@ AVAILABLE_COMMANDS: List[click.Command] = [list_commands._list, init_commands.in
     default=None,
     help="The id of the workspace on which you want octavia-cli to work. Defaults to the first one found on your Airbyte instance.",
 )
+@click.option(
+    "--enable-telemetry/--disable-telemetry",
+    envvar="OCTAVIA_ENABLE_TELEMETRY",
+    default=True,
+    help="Enable or disable usage tracking for telemetry and analytics.",
+)
 @click.pass_context
-def octavia(ctx: click.Context, airbyte_url: str, workspace_id: str) -> None:
+def octavia(ctx: click.Context, airbyte_url: str, workspace_id: str, enable_telemetry: bool) -> None:
     ctx.ensure_object(dict)
     ctx.obj["API_CLIENT"] = get_api_client(airbyte_url)
     ctx.obj["WORKSPACE_ID"] = get_workspace_id(ctx.obj["API_CLIENT"], workspace_id)
     ctx.obj["PROJECT_IS_INITIALIZED"] = check_is_initialized()
+    ctx.obj["TELEMETRY_IS_ENABLED"] = enable_telemetry
+
     click.echo(
         click.style(
             f"🐙 - Octavia is targetting your Airbyte instance running at {airbyte_url} on workspace {ctx.obj['WORKSPACE_ID']}.", fg="green"
