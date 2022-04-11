@@ -9,10 +9,14 @@ import analytics
 import click
 
 
+def build_user_agent(octavia_version, workspace_id):
+    return f"octavia-cli/{octavia_version}/{workspace_id}"
+
+
 class TelemetryClient:
 
     DEV_WRITE_KEY = "4rQEsg0yKxpBjgcYai7eODZysG0G3cWE"
-    PROD_WRITE_KEY = "4rQEsg0yKxpBjgcYai7eODZysG0G3cWE"
+    PROD_WRITE_KEY = "aWjmJoEYrPXNBCsELHsBEbNeZR2IJfJI"
 
     def __init__(self, send_data: bool = False) -> None:
         self.segment_client = analytics.Client(self.write_key, send=send_data)
@@ -46,8 +50,8 @@ class TelemetryClient:
             "success": error is None,
             "error_type": error.__class__.__name__,
             "project_is_initialized": ctx.obj.get("PROJECT_IS_INITIALIZED"),
+            "airbyte_role": os.getenv("AIRBYTE_ROLE"),
         }
-        self.segment_client.identify(user_id=user_id, anonymous_id=anonymous_id, context=segment_context)
         command_name = self._create_command_name(ctx, extra_info_name)
         self.segment_client.track(
             user_id=user_id, anonymous_id=anonymous_id, event=command_name, properties=segment_properties, context=segment_context

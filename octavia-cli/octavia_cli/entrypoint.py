@@ -14,7 +14,7 @@ from .check_context import check_api_health, check_is_initialized, check_workspa
 from .generate import commands as generate_commands
 from .init import commands as init_commands
 from .list import commands as list_commands
-from .telemetry import TelemetryClient
+from .telemetry import TelemetryClient, build_user_agent
 
 AVAILABLE_COMMANDS: List[click.Command] = [list_commands._list, init_commands.init, generate_commands.generate, apply_commands.apply]
 
@@ -27,7 +27,7 @@ def set_context(ctx, airbyte_url, workspace_id, enable_telemetry):
         ctx.obj["TELEMETRY_CLIENT"] = telemetry_client
         api_client = get_api_client(airbyte_url)
         ctx.obj["WORKSPACE_ID"] = get_workspace_id(api_client, workspace_id)
-        api_client.user_agent = f"octavia-cli/{ctx.obj['OCTAVIA_VERSION']}/{ctx.obj['WORKSPACE_ID']}"
+        api_client.user_agent = build_user_agent(ctx.obj["OCTAVIA_VERSION"], ctx.obj["WORKSPACE_ID"])
         ctx.obj["API_CLIENT"] = api_client
         ctx.obj["PROJECT_IS_INITIALIZED"] = check_is_initialized()
     except Exception as e:
@@ -65,7 +65,6 @@ def octavia(ctx: click.Context, airbyte_url: str, workspace_id: str, enable_tele
 def get_api_client(airbyte_url):
     client_configuration = airbyte_api_client.Configuration(host=f"{airbyte_url}/api")
     api_client = airbyte_api_client.ApiClient(client_configuration)
-    api_client.user_agent = "octavia-cli/"
     check_api_health(api_client)
     return api_client
 
